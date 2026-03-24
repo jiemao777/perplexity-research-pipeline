@@ -259,7 +259,110 @@ bash ~/.claude/skills/web-access/scripts/check-deps.sh
 - Include a mix of product pages, guide pages, category pages, and trust pages (about-us, COA, MSDS, factory).
 - The full prompt including all links and images can be large. This is fine.
 
-### Step 4: Notify User (END)
+### Step 4: Generate Article via ChatGPT (Optional - User Choice)
+
+**User Choice:** Before proceeding, ask the user:
+"文章生成方式：
+1. 自动化：通过浏览器自动操作 ChatGPT 生成文章（需要已登录 ChatGPT）
+2. 手动：打开 final prompt 文件，手动复制到 ChatGPT 生成
+
+请选择 1 或 2："
+
+**If user chooses Option 1 (Automatic):**
+
+1. **Read final prompt content**
+   ```bash
+   # Read the final prompt file
+   PROMPT_CONTENT=$(cat "C:/Users/Chen/slug-final-prompt.md")
+   ```
+
+2. **Open ChatGPT**
+   ```bash
+   curl -s "http://localhost:3456/new?url=https://chat.openai.com/"
+   # Returns targetId
+   ```
+
+3. **Wait for page load**
+   ```bash
+   sleep 5
+   ```
+
+4. **Check login status**
+   ```bash
+   curl -s -X POST "http://localhost:3456/eval?target=TARGET_ID" -d '
+     (() => {
+       const textarea = document.querySelector("textarea[placeholder*=\"Message\"]") ||
+                        document.querySelector("#prompt-textarea");
+       return textarea ? "ready" : "loading";
+     })()'
+   ```
+
+5. **Paste prompt and send**
+   ```bash
+   # Find textarea and paste content
+   curl -s -X POST "http://localhost:3456/eval?target=TARGET_ID" -d "
+     (() => {
+       const textarea = document.querySelector('textarea[placeholder*=\"Message\"]') ||
+                        document.querySelector('#prompt-textarea');
+       if (textarea) {
+         textarea.value = \`$PROMPT_CONTENT\`;
+         textarea.dispatchEvent(new Event('input', { bubbles: true }));
+         const sendBtn = document.querySelector('button[data-testid=\"send-button\"]') ||
+                        document.querySelector('button[aria-label=\"Send message\"]');
+         if (sendBtn && !sendBtn.disabled) {
+           sendBtn.click();
+           return 'sent';
+         }
+       }
+       return 'error';
+     })()"
+   ```
+
+6. **Wait for generation to complete** (3-5 minutes typically)
+   - Use short wait loops (15-20 seconds) with status checks
+   - Check for completion indicators (stop button disappears, final response visible)
+   ```bash
+   # Loop until generation completes
+   for i in {1..20}; do
+     STATUS=$(curl -s -X POST "http://localhost:3456/eval?target=TARGET_ID" -d '
+       (() => {
+         const stopBtn = document.querySelector("button[aria-label=\"Stop generating\"]");
+         const responses = document.querySelectorAll("[data-message-author-role=\"assistant\"]");
+         return stopBtn ? "generating" : (responses.length > 0 ? "complete" : "waiting");
+       })()')
+
+     if [ "$STATUS" = "complete" ]; then
+       break
+     fi
+     sleep 15
+   done
+   ```
+
+7. **Extract generated article**
+   ```bash
+   curl -s -X POST "http://localhost:3456/eval?target=TARGET_ID" -d '
+     (() => {
+       const responses = document.querySelectorAll("[data-message-author-role=\"assistant\"]");
+       const lastResponse = responses[responses.length - 1];
+       return lastResponse ? lastResponse.innerText : "";
+     })()' > "C:/Users/Chen/slug-generated-article.md"
+   ```
+
+8. **Close ChatGPT tab**
+   ```bash
+   curl -s "http://localhost:3456/close?target=TARGET_ID"
+   ```
+
+9. **Open generated article file**
+   ```bash
+   start "" "C:/Users/Chen/slug-generated-article.md"
+   ```
+
+10. **Ask user to review and publish**
+    - Confirm the generated article is ready
+    - Request the published URL once live
+
+**If user chooses Option 2 (Manual):**
 
 1. Confirm the final prompt file has been saved.
 2. Tell the user the file path and approximate file size.
@@ -267,10 +370,23 @@ bash ~/.claude/skills/web-access/scripts/check-deps.sh
    - Windows: `start "" "path/to/file.md"`
    - macOS/Linux: `open "path/to/file.md"`
 4. Remind the user to manually copy the file content to ChatGPT and generate the article.
-5. Default mode: ask the user for the published article URL once it is live.
-6. When the user provides the URL, append it to the internal links source file (or update the active master links file) in the same format as existing entries.
-7. **Automatically proceed to the next keyword** (if any remain in the batch).
-8. Batch override exception: if the user explicitly asked for one-pass completion without waiting for manual URL callbacks, do not pause. Generate predicted final URLs from slugs, update internal links immediately, and finish the whole batch.
+5. Wait for user to provide published article URL.
+
+**Common Step 5 (Both Options):**
+
+1. Ask the user for the published article URL once it is live.
+2. When the user provides the URL, append it to the internal links source file (or update the active master links file) in the same format as existing entries.
+3. **Automatically proceed to the next keyword** (if any remain in the batch).
+4. Batch override exception: if the user explicitly asked for one-pass completion without waiting for manual URL callbacks, do not pause. Generate predicted final URLs from slugs, update internal links immediately, and finish the whole batch.
+
+---
+
+**Troubleshooting ChatGPT Automation:**
+
+- **Not logged in:** Guide user to login to ChatGPT in browser first, then retry
+- **Generation timeout:** Increase wait loops, article generation can take 3-5 minutes
+- **Content truncated:** Check if ChatGPT hit token limit, may need to extract multiple response blocks
+- **Send button disabled:** Wait a few seconds for ChatGPT to process pasted content before clicking
 
 ---
 
