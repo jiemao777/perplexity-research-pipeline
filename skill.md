@@ -1,5 +1,5 @@
 ---
-name: pangoo-content-pipeline
+name: perplexity-research-pipeline
 description: Use Perplexity in the browser to run deep research from a user-provided prompt, especially when the user explicitly asks to use Perplexity, says "deep search/deep research", wants browser-based Perplexity instead of native web search, or wants a research-to-content pipeline. Also use when the user wants to: (1) generate a research Markdown file from Perplexity/browser research, (2) treat that Markdown as the information section of a content-generation workflow, (3) assemble a final writing prompt from a content-generation template plus research findings. This skill uses web-access CDP for browser operations. The pipeline stops after assembling the final prompt — the user manually copies it to ChatGPT for generation.
 ---
 
