@@ -25,6 +25,51 @@ Requirements:
 
 If CDP is not ready, guide the user to complete setup before proceeding.
 
+---
+
+## Data Source Configuration
+
+**Default Data Source Directory:** `Z:\pangoobiz-links-and-images\`
+
+**Files:**
+- **Internal Links:** `Z:\pangoobiz-links-and-images\internal-links.txt`
+  - Format: Plain URL list, one per line
+  - Usage: Fills `<internal links>` section in final prompt
+  - Update: Append new published URLs after article publication
+
+- **Image Embeds:** `Z:\pangoobiz-links-and-images\image-embeds.txt`
+  - Format: Structured metadata
+  - Example: `URL: [link URL], Image URL: [image URL], Title: [alt text]`
+  - Usage: Fills `<image embeds>` section in final prompt
+
+**Conversion command (for image embeds):**
+```bash
+grep -E "^URL:" "Z:\pangoobiz-links-and-images\image-embeds.txt" | sed 's/URL: \([^,]*\), Image URL: \([^,]*\), Title: \(.*\)/[![\3](\2)](\1)/'
+```
+
+**PowerShell pattern for final prompt generation:**
+```powershell
+# Read internal links
+\$links = Get-Content 'Z:\pangoobiz-links-and-images\internal-links.txt' -Raw
+
+# Read and convert image embeds
+\$imageLines = Get-Content 'Z:\pangoobiz-links-and-images\image-embeds.txt' | Where-Object { \$_ -match '^URL:' }
+\$images = @()
+foreach (\$line in \$imageLines) {
+    if (\$line -match 'URL: ([^,]+), Image URL: ([^,]+), Title: (.+)') {
+        \$url = \$matches[1]
+        \$imgUrl = \$matches[2]
+        \$title = \$matches[3]
+        \$images += "[!\$(\$title)](\$(\$imgUrl))(\$(\$url))"
+    }
+}
+\$imageMarkdown = \$images -join "\`n"
+```
+
+**Important:** Always use these paths when assembling final prompts. The user may update this configuration if data sources are moved.
+
+---
+
 ## Core operating modes
 
 Support these two modes:
@@ -375,7 +420,10 @@ bash ~/.claude/skills/web-access/scripts/check-deps.sh
 **Common Step 5 (Both Options):**
 
 1. Ask the user for the published article URL once it is live.
-2. When the user provides the URL, append it to the internal links source file (or update the active master links file) in the same format as existing entries.
+2. When the user provides the URL, append it to `Z:\pangoobiz-links-and-images\internal-links.txt` in the same format as existing entries (one URL per line).
+   ```bash
+   echo "https://pangoo.biz/new-article-url/" >> "Z:\pangoobiz-links-and-images\internal-links.txt"
+   ```
 3. **Automatically proceed to the next keyword** (if any remain in the batch).
 4. Batch override exception: if the user explicitly asked for one-pass completion without waiting for manual URL callbacks, do not pause. Generate predicted final URLs from slugs, update internal links immediately, and finish the whole batch.
 
